@@ -24,11 +24,20 @@ public class Job {
     @Column(columnDefinition = "jsonb", nullable = false)
     private String payload;
 
-    @Column(name = "max_retries")
+    @Column(name = "max_retries", nullable = false)
     private int maxRetries = 3;
 
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt = OffsetDateTime.now();
+
+    @Column(name = "assigned_worker_id")
+    private String assignedWorkerID;
+
+    @Column(name = "last_heartbeat_at")
+    private OffsetDateTime lastHeartbeatAt;
+
+    @Column(name = "retries_count", nullable = false)
+    private int retriesCount = 0;
 
     // Standard Getters and Setters
     public UUID getId() { return id; }
@@ -42,4 +51,10 @@ public class Job {
     public int getMaxRetries() { return maxRetries; }
     public void setMaxRetries(int maxRetries) { this.maxRetries = maxRetries; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
+    public int getRetriesCount() { return retriesCount; }
+    public void setRetriesCount(int retriesCount) { this.retriesCount = retriesCount; }
+    public String getAssignedWorkerID() { return assignedWorkerID; }
+    public void setAssignedWorkerID(String assignedWorkerID) { this.assignedWorkerID = assignedWorkerID; }
+    public OffsetDateTime getLastHeartbeatAt() { return lastHeartbeatAt; }
+    public void setLastHeartbeatAt(OffsetDateTime lastHeartbeatAt) { this.lastHeartbeatAt = lastHeartbeatAt; }
 }

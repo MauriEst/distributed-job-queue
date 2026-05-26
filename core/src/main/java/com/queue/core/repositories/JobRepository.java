@@ -1,10 +1,10 @@
 package com.queue.core.repositories;
 
 import com.queue.core.models.Job;
-import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,4 +22,10 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
         FOR UPDATE SKIP LOCKED
         """, nativeQuery = true)
     Optional<Job> findNextAvailableJobForUpdate();
+
+    /**
+     * Finds all jobs stuck in PROCESSING where the heartbeat hasn't been updated
+     * since the threshold time.
+     */
+    List<Job> findByStatusAndLastHeartbeatAtBefore(com.queue.core.models.JobStatus status, OffsetDateTime threshold);
 }

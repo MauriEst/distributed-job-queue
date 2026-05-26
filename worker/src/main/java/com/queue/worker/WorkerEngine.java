@@ -9,7 +9,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -21,6 +23,9 @@ public class WorkerEngine {
 
     // Create an ExecutorService backed entirely by Java 21 Virtual Threads
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+
+    // Generate a unique identifier for this specific worker node process
+    private final String workerId = "worker-" + UUID.randomUUID().toString().substring(0, 8);
 
     public WorkerEngine(JobRepository jobRepository) {
         this.jobRepository = jobRepository;
@@ -36,34 +41,52 @@ public class WorkerEngine {
 
             // Instant transition status to PROCESSING within transaction lock
             job.setStatus(JobStatus.PROCESSING);
+            job.setAssignedWorkerID(workerId);
+            job.setLastHeartbeatAt(OffsetDateTime.now());
             jobRepository.saveAndFlush(job);
 
-            log.info("Successfully claimed Job {} [Type: {}]. Handing off to Virtual Thread...", job.getId(), job.getTaskType());
+            log.info("[{}] successfully claimed Job {} [Type: {}]. Handing off to Virtual Thread...", workerId, job.getId(), job.getTaskType());
 
             // Send execution to virtual thread
-            executor.submit(() -> executeTask(job));
+            executor.submit(() -> executeTask(job.getId()));
         }
     }
 
-    private void executeTask(Job job) {
+    private void executeTask(UUID jobId) {
         try {
-            log.info("Starting processing execution for Job {}", job.getId());
+            log.info("Starting processing execution for Job {}", jobId);
 
-            // Mocking a heavy workload execution
-            Thread.sleep(5000);
+            // Simulate a heavy 8-second processing workload, beating the heart every 2 seconds
+            for (int i = 0; i < 4; i++) {
+                Thread.sleep(2000);
+                sendHeartbeat(jobId);
+            }
 
             // Update database state to complete
-            updateJobStatus(job.getId(), JobStatus.COMPLETED, null);
-            log.info("Finished execution successfully for job {}", job.getId());
+            updateJobStatus(jobId, JobStatus.COMPLETED, null);
+            log.info("Finished execution successfully for job {}", jobId);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            updateJobStatus(job.getId(), JobStatus.FAILED, "Task execution interrupted");
+            updateJobStatus(jobId, JobStatus.FAILED, "Task execution interrupted");
         } catch (Exception e) {
-            updateJobStatus(job.getId(), JobStatus.FAILED, e.getMessage());
+            updateJobStatus(jobId, JobStatus.FAILED, e.getMessage());
         }
     }
 
-    private void updateJobStatus(java.util.UUID jobId, JobStatus finalStatus, String errorMessage) {
+    private void sendHeartbeat(UUID jobId) {
+        try {
+            Job job = jobRepository.findById(jobId).orElseThrow();
+            if (job.getStatus() == JobStatus.PROCESSING) {
+                job.setLastHeartbeatAt(OffsetDateTime.now());
+                jobRepository.save(job);
+                log.debug("Heartbeat kicked for Job {}", jobId);
+            }
+        } catch (Exception e) {
+            log.error("Failed to send heartbeat for job {}: {}", jobId, e.getMessage());
+        }
+    }
+
+    private void updateJobStatus(UUID jobId, JobStatus finalStatus, String errorMessage) {
         // Open a clean isolation context to write completion state
         Job job = jobRepository.findById(jobId).orElseThrow();
         job.setStatus(finalStatus);
