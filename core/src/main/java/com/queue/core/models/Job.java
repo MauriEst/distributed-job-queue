@@ -39,6 +39,9 @@ public class Job {
     @Column(name = "retries_count", nullable = false)
     private int retriesCount = 0;
 
+    @Column(name = "error_message")
+    private String errorMessage;
+
     // Standard Getters and Setters
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
@@ -57,4 +60,6 @@ public class Job {
     public void setAssignedWorkerID(String assignedWorkerID) { this.assignedWorkerID = assignedWorkerID; }
     public OffsetDateTime getLastHeartbeatAt() { return lastHeartbeatAt; }
     public void setLastHeartbeatAt(OffsetDateTime lastHeartbeatAt) { this.lastHeartbeatAt = lastHeartbeatAt; }
+    public String getErrorMessage() { return errorMessage; }
+    public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
 }
