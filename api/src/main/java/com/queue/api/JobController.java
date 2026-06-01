@@ -31,9 +31,17 @@ public class JobController {
         job.setMaxRetries((Integer) request.get("maxRetries"));
         job.setStatus(JobStatus.PENDING);
 
+        // Allow the client to specify a future execution time (ISO-8601 format string)
+        if (request.containsKey("executeAt")) {
+            job.setExecuteAt(OffsetDateTime.parse((String) request.get("executeAt")));
+        } else {
+            job.setExecuteAt(OffsetDateTime.now());
+        }
+
         Job savedJob = jobRepository.save(job);
 
-        // EVENT TRIGGER: Notify workers over Redis channel that a new job is ready
+        // EVENT TRIGGER: We still notify Redis. If the job is scheduled for the future,
+        // the worker will wake up, check the DB, see nothing is ripe, and go back to sleep.
         redisTemplate.convertAndSend("job_channel", savedJob.getId().toString());
 
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(savedJob);

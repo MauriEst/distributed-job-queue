@@ -42,7 +42,12 @@ public class Job {
     @Column(name = "error_message")
     private String errorMessage;
 
+    @Column(name = "execute_at", nullable = false)
+    private OffsetDateTime executeAt = OffsetDateTime.now();
+
     // Standard Getters and Setters
+    public OffsetDateTime getExecuteAt() { return executeAt; }
+    public void setExecuteAt(OffsetDateTime executeAt) { this.executeAt = executeAt; }
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
     public String getTaskType() { return taskType; }

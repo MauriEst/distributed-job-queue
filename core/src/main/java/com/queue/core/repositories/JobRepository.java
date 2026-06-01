@@ -17,7 +17,8 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
     @Query(value = """
         SELECT * FROM jobs
         WHERE status = 'PENDING'
-        ORDER BY created_at ASC 
+            AND execute_at <= CURRENT_TIMESTAMP
+        ORDER BY execute_at ASC 
         LIMIT 1
         FOR UPDATE SKIP LOCKED
         """, nativeQuery = true)
