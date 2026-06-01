@@ -16,3 +16,9 @@ spring:
   threads:
     virtual:
       enabled: true # Forces Spring to use lightweight Virtual Threads instead of OS threads
+
+logging:
+  level:
+    root: INFO
+    # Only show DEBUG logs for our own code
+    com.queue.worker: DEBUG

@@ -1,6 +1,10 @@
 package com.queue.worker;
 
+import com.queue.core.models.Job;
 import com.queue.core.models.JobStatus;
+import com.queue.core.repositories.JobRepository;
+import com.queue.worker.handlers.TaskHandlerRegistry;
+import com.queue.worker.handlers.TaskHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -11,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class WorkerEngine {
@@ -18,11 +23,17 @@ public class WorkerEngine {
     private static final Logger log = LoggerFactory.getLogger(WorkerEngine.class);
 
     private final JobTransactionService txService; // transaction layer proxy
+    private final JobRepository jobRepository;
+    private final TaskHandlerRegistry taskHandlerRegistry;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private final String workerId = "worker-" + UUID.randomUUID().toString().substring(0, 8);
 
-    public WorkerEngine(JobTransactionService txService) {
+    public WorkerEngine(JobTransactionService txService,
+                        JobRepository jobRepository,
+                        TaskHandlerRegistry taskHandlerRegistry) {
         this.txService = txService;
+        this.jobRepository = jobRepository;
+        this.taskHandlerRegistry = taskHandlerRegistry;
     }
 
     @Scheduled(fixedDelay = 30000) // Fallback sanity sweep
@@ -58,15 +69,42 @@ public class WorkerEngine {
     }
 
     private void executeTask(UUID jobId) {
+
+        // flag to control sidecar heartbeat thread
+        AtomicBoolean isTaskRunning = new AtomicBoolean(true);
+
         try {
             log.info("Starting task execution context for Job {}", jobId);
 
-            // Simulate a heavy 8-second processing workload, beating the heart every 2 seconds
-            for (int i = 0; i < 4; i++) {
-                Thread.sleep(2000);
-                txService.sendHeartbeat(jobId);
-            }
+            // 1. Fetch the full Job from the database to read its taskType and payload
+            Job job = jobRepository.findById(jobId)
+                            .orElseThrow(() -> new IllegalStateException("Job disappeared from database: " + jobId));
 
+            // 2. Look up the specific code strategy for this task type
+            TaskHandler taskHandler = taskHandlerRegistry.getHandler(job.getTaskType());
+
+            // launch the background heartbeat monitor as a Virtual Thread
+            Thread.ofVirtual().start(() -> {
+                log.info("Started heartbeat monitor for Job {}", jobId);
+                while (isTaskRunning.get()) {
+                    try {
+                        Thread.sleep(2000); // Pulse every 2 seconds
+                        if (isTaskRunning.get()) { // Double-check we didn't finish while sleeping
+                            txService.sendHeartbeat(jobId);
+                            log.debug("Pulsed heartbeat for Job {}", jobId);
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+                log.info("Stopped heartbeat monitor for Job {}", jobId);
+            });
+
+            // 3. Execute the isolated business logic on main thread
+            taskHandler.execute(job);
+
+            // 4. Mark as completed if no exceptions were thrown
             txService.updateJobStatus(jobId, JobStatus.COMPLETED, null);
             log.info("Finished execution successfully for job {}", jobId);
 
@@ -75,6 +113,9 @@ public class WorkerEngine {
             txService.updateJobStatus(jobId, JobStatus.FAILED, "Task execution interrupted via runtime signal.");
         } catch (Exception e) {
             txService.updateJobStatus(jobId, JobStatus.FAILED, e.getMessage());
+        } finally {
+            // 5. GUARANTEE the heartbeat monitor stops, even if the handler throws an exception!
+            isTaskRunning.set(false);
         }
     }
 
