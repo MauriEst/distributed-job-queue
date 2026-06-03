@@ -24,6 +24,7 @@ public class EmailTaskHandler implements TaskHandler {
 
         log.info("Payload received: {}", job.getPayload());
 
+//        throw new RuntimeException("Simulated API failure");
         // Simulating some network I/O latency
         Thread.sleep(15000);
 

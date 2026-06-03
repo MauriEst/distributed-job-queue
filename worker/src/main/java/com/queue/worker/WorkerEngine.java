@@ -110,9 +110,9 @@ public class WorkerEngine {
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            txService.updateJobStatus(jobId, JobStatus.FAILED, "Task execution interrupted via runtime signal.");
+            txService.handleJobFailure(jobId, "Task execution interrupted via runtime signal.");
         } catch (Exception e) {
-            txService.updateJobStatus(jobId, JobStatus.FAILED, e.getMessage());
+            txService.handleJobFailure(jobId, e.getMessage());
         } finally {
             // 5. GUARANTEE the heartbeat monitor stops, even if the handler throws an exception!
             isTaskRunning.set(false);
