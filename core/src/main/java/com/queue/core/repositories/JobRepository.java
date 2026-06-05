@@ -1,6 +1,9 @@
 package com.queue.core.repositories;
 
 import com.queue.core.models.Job;
+import com.queue.core.models.JobStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import java.time.OffsetDateTime;
@@ -29,4 +32,6 @@ public interface JobRepository extends JpaRepository<Job, UUID> {
      * since the threshold time.
      */
     List<Job> findByStatusAndLastHeartbeatAtBefore(com.queue.core.models.JobStatus status, OffsetDateTime threshold);
+
+    Page<Job> findByStatus(com.queue.core.models.JobStatus status, Pageable pageable);
 }

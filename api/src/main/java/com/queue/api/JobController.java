@@ -3,6 +3,9 @@ package com.queue.api;
 import com.queue.core.models.Job;
 import com.queue.core.models.JobStatus;
 import com.queue.core.repositories.JobRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -52,5 +55,24 @@ public class JobController {
         return jobRepository.findById(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping
+    public ResponseEntity<Page<Job>> listJobs(
+            @RequestParam(required = false) JobStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        // newest jobs first
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by("createdAt").descending());
+
+        Page<Job> jobPage;
+        if (status != null) {
+            jobPage = jobRepository.findByStatus(status, pageRequest);
+        } else {
+            jobPage = jobRepository.findAll(pageRequest);
+        }
+
+        return ResponseEntity.ok(jobPage);
     }
 }
