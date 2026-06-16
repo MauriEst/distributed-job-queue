@@ -2,6 +2,7 @@ package com.queue.worker.handlers;
 
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -25,5 +26,9 @@ public class TaskHandlerRegistry {
             throw new IllegalArgumentException("No handler registered for task type: " + taskType);
         }
         return handler;
+    }
+
+    public List<String> getSupportedTaskTypes() {
+        return new ArrayList<>(handlers.keySet());
     }
 }

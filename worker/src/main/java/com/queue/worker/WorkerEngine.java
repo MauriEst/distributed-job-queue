@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import jakarta.annotation.PreDestroy;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -54,9 +55,17 @@ public class WorkerEngine {
     private void executeDrainLoop() {
         boolean continuousCheck = true;
 
+        List<String> supportedTasks = taskHandlerRegistry.getSupportedTaskTypes();
+
+        // Safety check: If a worker has NO handlers, it shouldn't poll the DB
+        if (supportedTasks.isEmpty()) {
+            log.warn("No TaskHandlers registered! Worker is idling.");
+            return;
+        }
+
         while (continuousCheck) {
             // Invoking across the proxy bean interface—REQUIRES_NEW transaction
-            Optional<UUID> claimedJobId = txService.claimNextJobAtomically(workerId);
+            Optional<UUID> claimedJobId = txService.claimNextJobAtomically(workerId, supportedTasks);
 
             if (claimedJobId.isPresent()) {
                 UUID jobId = claimedJobId.get();

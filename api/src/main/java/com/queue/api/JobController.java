@@ -27,9 +27,18 @@ public class JobController {
     }
 
     @PostMapping
-    public ResponseEntity<Job> createJob(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> createJob(@RequestBody Map<String, Object> request) {
+        String taskType = (String) request.get("taskType");
+
+        // INPUT VALIDATION
+        if (taskType == null || taskType.trim().isEmpty()) {
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "taskType cannot be null or empty"));
+        }
+
         Job job = new Job();
-        job.setTaskType((String) request.get("taskType"));
+        job.setTaskType(taskType);
         job.setPayload((String) request.get("payload"));
         job.setMaxRetries((Integer) request.get("maxRetries"));
         job.setStatus(JobStatus.PENDING);

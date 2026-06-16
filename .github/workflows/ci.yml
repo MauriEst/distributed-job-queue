@@ -1,7 +1,6 @@
 # .github/workflows/ci.yml
-name: Java CI/CD Pipeline
+name: Polyglot CI/CD Pipeline
 
-# Trigger this pipeline whenever code is pushed or a PR is opened against the main branch
 on:
   push:
     branches: [ "main" ]
@@ -9,29 +8,49 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build-and-test:
-    runs-on: ubuntu-latest # GitHub gives us a free Linux server to run this on
-
+  # JOB 1: The Java Core, API, and Worker
+  build-java:
+    runs-on: ubuntu-latest
     steps:
-      # 1. Pull the code
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      # 2. Install Java 21
       - name: Set up JDK 21
         uses: actions/setup-java@v3
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: maven # Caches dependencies
+          cache: maven
 
-      # 3. Compile the code and run any tests using Maven
       - name: Build and Test with Maven
-        run: mvn clean package -DskipTests # (Skip for now!)
+        run: mvn clean package -DskipTests
 
-      # 4. Verify Docker images build
       - name: Build API Docker Image
         run: docker build -t queue-api:test ./api
 
-      - name: Build Worker Docker Image
+      - name: Build Java Worker Docker Image
         run: docker build -t queue-worker:test ./worker
+
+  # JOB 2: The Python AI Worker
+  build-python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          cd python-worker
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # TODO: add a step here to run PyTest or Flake8 linting
+
+      - name: Build Python Worker Docker Image
+        run: docker build -t queue-python-worker:test ./python-worker

@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,8 +25,8 @@ public class JobTransactionService {
     }
 
     @Transactional
-    public Optional<UUID> claimNextJobAtomically(String workerId) {
-        Optional<Job> availableJob = jobRepository.findNextAvailableJobForUpdate();
+    public Optional<UUID> claimNextJobAtomically(String workerId, List<String> supportedTaskTypes) {
+        Optional<Job> availableJob = jobRepository.findNextAvailableJobForUpdate(supportedTaskTypes);
 
         if (availableJob.isPresent()) {
             Job job = availableJob.get();

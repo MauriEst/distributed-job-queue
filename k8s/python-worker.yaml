@@ -1,0 +1,24 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-worker-deployment
+spec:
+  replicas: 1  # run 1 AI worker for now
+  selector:
+    matchLabels:
+      app: python-worker
+  template:
+    metadata:
+      labels:
+        app: python-worker
+    spec:
+      containers:
+        - name: python-worker
+          image: queue-python-worker:latest
+          imagePullPolicy: IfNotPresent  # local development!
+          env:
+            - name: DB_HOST
+              value: "postgres"
+            - name: REDIS_HOST
+              value: "redis"
