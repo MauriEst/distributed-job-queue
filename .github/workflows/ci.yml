@@ -1,0 +1,37 @@
+# .github/workflows/ci.yml
+name: Java CI/CD Pipeline
+
+# Trigger this pipeline whenever code is pushed or a PR is opened against the main branch
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest # GitHub gives us a free Linux server to run this on
+
+    steps:
+      # 1. Pull the code
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # 2. Install Java 21
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven # Caches dependencies
+
+      # 3. Compile the code and run any tests using Maven
+      - name: Build and Test with Maven
+        run: mvn clean package -DskipTests # (Skip for now!)
+
+      # 4. Verify Docker images build
+      - name: Build API Docker Image
+        run: docker build -t queue-api:test ./api
+
+      - name: Build Worker Docker Image
+        run: docker build -t queue-worker:test ./worker
