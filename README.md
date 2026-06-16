@@ -41,48 +41,72 @@ If a worker node crashes mid-task, the active job risks becoming a permanent "zo
 ### 4. Event-Driven Performance via Redis Caching
 Rather than forcing background workers to spam the relational database with endless poll queries during idle hours, the architecture leverages Redis as an event broker. Workers remain silent until an in-memory alert wakes them up, dropping resource consumption on the database to zero when the queue is dry.
 
+### 5. Exponential Backoff & Retry Routing
+To protect downstream systems from "thundering herd" scenarios during outages, failed jobs are not retried immediately. The engine calculates a dynamic backoff delay using the formula `base_delay * (2 ^ attempt)`. This gives struggling external APIs time to recover before the worker pool attempts to process the payload again.
+
+### 6. Time-Delayed Execution
+The queue supports future scheduling. Clients can submit jobs with an `executeAt` ISO-8601 timestamp. The worker's leasing query (`execute_at <= CURRENT_TIMESTAMP`) ensures these rows remain invisible to the active worker pool until the exact millisecond they ripen, requiring zero background cron polling.
+
+### 7. Dynamic Task Routing (Strategy Pattern)
+To adhere to the Open-Closed Principle, the core execution loop is entirely decoupled from business logic. A `TaskHandlerRegistry` dynamically routes JSON payloads to specific `TaskHandler` beans at runtime based on the `taskType` string. Adding a new background task (like Image Processing, AI summarize) requires zero modifications to the core worker engine.
+
 ---
 
 ## Technical Stack & Tools
 
 * **Runtime**: Java 21 (Leveraging Project Loom Virtual Threads)
-* **Framework**: Spring Boot 3.x (Spring Data JPA, Redis Core)
+* **Framework**: Spring Boot 3.2.x (Spring Data JPA, Redis Core)
 * **Database**: PostgreSQL 15+ (Row-Level Locking, Advanced Indexing)
 * **Cache/Broker**: Redis 7 (Pub/Sub Event Signaling)
-* **Build System**: Maven (Multi-Module Project Architecture)
-* **Containerization**: Docker Compose
+* **Architecture**: Maven Multi-Module (Core, API, Worker)
+* **Orchestration**: Docker Compose & Kubernetes (K8s Manifests included)
+* **CI/CD**: GitHub Actions (Automated build and test pipelines)
 
 ---
 
-## Local Stress Testing & Verification
+### Local Stress Testing & Verification
 
-The queue's resilience can be verified locally by spinning up multiple worker nodes and hammering the API with high concurrent traffic.
+With Docker Compose, you can instantly spin up the entire distributed cluster on your local machine. The compose file is pre-configured to launch multiple isolated worker containers to prove out the system's distributed locking and concurrency mechanics.
 
-### 1. Spin up the Core Infrastructure
+### 1. Boot the Cluster
+Make sure your Docker daemon is running, then execute:
 ```bash
-docker-compose up -d
-mvn clean install
+docker-compose up --build -d
 ```
+This will spin up PostgreSQL, Redis, the API gateway, and two independent Worker nodes.
 
-### 2. Boot Multiple Parallel Worker Processes
-Configure IntelliJ to allow parallel run configurations of `WorkerApplication`. Set your `server.port=0` inside `application.yml` to automatically allocate unique dynamic ports, then boot 3-4 separate worker instances.
-
-### 3. Flood the Ingestion Pipeline
+### 2. Flood the Ingestion Pipeline
 Execute this parallel shell loop to hit the endpoint with 200 concurrent tasks fractions of a second apart:
 
 ```bash
+# Example: Inject 200 immediate tasks
 for i in {1..200}; do
   curl -s -X POST http://localhost:8080/jobs \
     -H "Content-Type: application/json" \
-    --data-raw "{\"taskType\": \"{task_example}\", \"payload\": \"{\\\"job_index\\\": $i}\", \"maxRetries\": 3}" > /dev/null &
+    --data-raw "{\"taskType\": \"SEND_EMAIL\", \"payload\": \"{\\\"job_index\\\": $i}\", \"maxRetries\": 3}" > /dev/null &
 done
 wait
 echo "Successfully injected 200 concurrent tasks"
 ```
 
-### 4. Observe System Behavior
-* Review the distinct worker logs to watch them perfectly slice and divide the 200 tasks in real-time with zero ID collisions.
-* Verify data states inside the Postgres Query window:
-```sql
-SELECT status, COUNT(*) FROM jobs GROUP BY status;
+### 3. Observe System Behavior
+Watch the logs of your multi-node worker pool. You will see both containers waking up instantly via the Redis signal, safely leasing jobs via Postgres row-locks, and processing the queue with zero ID collisions.
+```bash
+# View aggregated logs from both workers
+docker logs -f jq_worker
+```
+Verify the final data states inside the Postgres database:
+```bash
+docker exec -it jq_postgres psql -U queue_user -d job_queue -c "SELECT status, COUNT(*) FROM jobs GROUP BY status;"
+```
+
+## Production Orchestration
+For production environments, the system is designed to be deployed onto a Kubernetes cluster. Standard K8s manifests are provided in the /k8s directory.
+
+To deploy the architecture to a cluster (e.g., Minikube, EKS, GKE):
+```bash
+kubectl apply -f k8s/postgres.yaml
+kubectl apply -f k8s/redis.yaml
+kubectl apply -f k8s/api.yaml
+kubectl apply -f k8s/worker.yaml
 ```
